@@ -27,7 +27,7 @@ This repository contains a Python implementation of a neural network with dropou
 3. Run the provided example script to train and evaluate the model:
 
    ```
-   python example.py
+   python main.py
 
    ``` 
 
