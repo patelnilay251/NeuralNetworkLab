@@ -28,6 +28,7 @@ class Regularization:
         elif self.reg_type == 'l2':
             return self.reg_strength * weights
 
+
 class Parameters:
     def __init__(self, input_size, output_size, learning_rate, regularization=None, dropout=None):
         self.weights = np.random.randn(input_size, output_size)
@@ -40,6 +41,7 @@ class Parameters:
         if self.regularization:
             self.weights -= self.regularization.compute_regularization(self.weights)
 
+
 class Neuron:
     def __init__(self, activation):
         self.activation = activation
@@ -51,18 +53,11 @@ class Neuron:
         if callable(self.activation):
             return self.activation(inputs, derivative=True)
         else:
-            if self.activation == 'relu':
-                return Activation.relu_derivative(inputs, derivative=True)
-            elif self.activation == 'sigmoid':
-                return Activation.sigmoid_derivative(inputs, derivative=True)
-            elif self.activation == 'tanh':
-                return Activation.tanh_derivative(inputs, derivative=True)
-            elif self.activation == 'softmax':
-                return Activation.softmax_derivative(inputs, derivative=True)
+            return getattr(Activation, f"{self.activation}_derivative")(inputs, derivative=True)
 
 
 class Activation:
-    
+
     @staticmethod
     def relu(x, derivative=False):
         if derivative:
@@ -83,10 +78,8 @@ class Activation:
 
     @staticmethod
     def softmax(x, derivative=False):
-        # Softmax derivative is a bit more complex, generally not used in backpropagation
         raise NotImplementedError("Softmax derivative not implemented")
 
-        
     @staticmethod
     def relu_derivative(x, derivative=False):
         if derivative:
@@ -107,10 +100,9 @@ class Activation:
 
     @staticmethod
     def softmax_derivative(x, derivative=False):
-        # Softmax derivative is a bit more complex, generally not used in backpropagation
         raise NotImplementedError("Softmax derivative not implemented")
 
-        
+
 class Layer:
     def __init__(self, neuron, parameters):
         self.neuron = neuron
@@ -125,13 +117,11 @@ class Layer:
         return activated
 
     def backward(self, inputs, gradients):
-        print("Gradients shape:", gradients.shape)
-        print("Inputs shape:", inputs.shape)
-        activation_gradients = gradients * self.neuron.compute_derivative(inputs)
-        print("Activation gradients shape:", activation_gradients.shape)
+        activation = self.neuron.compute_activation(inputs)
+        activation_gradients = gradients * self.neuron.compute_derivative(activation)
         if self.parameters.dropout:
             activation_gradients = self.parameters.dropout.apply_dropout(activation_gradients)
-        weights_gradients = np.dot(inputs.T, activation_gradients)
+        weights_gradients = np.dot(activation.T, activation_gradients)
         bias_gradients = np.sum(activation_gradients, axis=0)
         new_gradients = np.dot(activation_gradients, self.parameters.weights.T)
         if self.parameters.regularization:
@@ -150,13 +140,15 @@ class ForwardPropagation:
             activations.append(activated)
         return activations
 
+
 class BackwardPropagation:
     @staticmethod
     def backward(inputs, outputs, gradients, layers):
         for i in range(len(layers) - 1, 0, -1):
             gradients = layers[i].backward(inputs, gradients)
-            inputs = outputs[i-1]
+            inputs = outputs[i - 1]
         return gradients
+
 
 class Model:
     def __init__(self):
@@ -172,14 +164,39 @@ class Model:
         return BackwardPropagation.backward(inputs, outputs, gradients, self.layers)
 
 
+def preprocess_data(X, y):
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    return X_scaled, y
+
+
+def train_model(X_train, y_train, model, epochs=1000):
+    for epoch in range(epochs):
+        outputs = model.forward_propagation(X_train)
+        predictions = outputs[-1]
+        loss = np.mean((predictions - y_train) ** 2)
+        gradients = 2 * (predictions - y_train) / len(X_train)
+        model.backward_propagation(X_train, outputs, gradients)
+        if epoch % 100 == 0:
+            print(f"Epoch {epoch}: Loss = {loss}")
+
+
+def evaluate_model(X_test, y_test, model):
+    test_outputs = model.forward_propagation(X_test)[-1]
+    test_predictions = (test_outputs > 0.5).astype(int)
+    accuracy = np.mean(test_predictions == y_test)
+    print("Test Accuracy:", accuracy)
+
+
 # Load Breast Cancer dataset
 data = load_breast_cancer()
 X, y = data.data, data.target
 
 # Preprocess the dataset
-scaler = StandardScaler()
-X = scaler.fit_transform(X)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_processed, y_processed = preprocess_data(X, y)
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X_processed, y_processed, test_size=0.2, random_state=42)
 
 # Update input size of the first layer
 input_size = X_train.shape[1]
@@ -190,23 +207,8 @@ model.add_layer(Layer(Neuron(Activation.relu), Parameters(input_size=input_size,
 model.add_layer(Layer(Neuron(Activation.relu), Parameters(input_size=4, output_size=4, learning_rate=0.01)))
 model.add_layer(Layer(Neuron(Activation.sigmoid), Parameters(input_size=4, output_size=1, learning_rate=0.01)))
 
-epochs = 1000
-for epoch in range(epochs):
-    # Forward propagation
-    outputs = model.forward_propagation(X_train)
-    predictions = outputs[-1]
+# Train the model
+train_model(X_train, y_train, model)
 
-    # Compute loss (MSE)
-    loss = np.mean((predictions - y_train) ** 2)
-    
-    # Backward propagation
-    gradients = 2 * (predictions - y_train) / len(X_train)
-    model.backward_propagation(X_train, outputs, gradients)
-    
-    if epoch % 100 == 0:
-        print(f"Epoch {epoch}: Loss = {loss}")
-
-test_outputs = model.forward_propagation(X_test)[-1]
-test_predictions = (test_outputs > 0.5).astype(int)  # Assuming binary classification
-accuracy = np.mean(test_predictions == y_test)
-print("Test Accuracy:", accuracy)
+# Evaluate the model
+evaluate_model(X_test, y_test, model)
