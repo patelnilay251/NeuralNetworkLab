@@ -4,11 +4,11 @@ This repository contains a Python implementation of a neural network with dropou
 
 # Features
 
-1. Implementation of a neural network with dropout and regularization.
-2. Flexible architecture allowing customization of parameters such as dropout rate, regularization type, and strength.
-3. Support for multiple activation functions including ReLU, sigmoid, and tanh.
-4. Ability to train the model on datasets for classification tasks.
-5. Evaluation of model performance through accuracy metrics.
+1. Implementation of Neural Network: The repository provides a complete implementation of a neural network with support for dropout and regularization techniques.
+2. Customization: The architecture allows for customization of parameters such as dropout rate, regularization type, and strength, enabling experimentation with different configurations.
+3. Activation Functions: Various activation functions including ReLU, sigmoid, and tanh are supported, providing flexibility in designing the network architecture.
+4. Training on Classification Tasks: The network can be trained on datasets for classification tasks, making it suitable for a wide range of applications.
+5. Model Evaluation: The model's performance can be evaluated using accuracy metrics, enabling assessment of its effectiveness in classification tasks.
 
 # Usage 
 
