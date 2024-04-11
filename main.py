@@ -1,7 +1,10 @@
 import numpy as np
 from sklearn.datasets import load_breast_cancer
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import make_scorer, mean_squared_error
+from sklearn.base import BaseEstimator, RegressorMixin
+
 
 class Dropout:
     def __init__(self, dropout_rate):
@@ -121,7 +124,7 @@ class Layer:
         activation_gradients = gradients * self.neuron.compute_derivative(activation)
         if self.parameters.dropout:
             activation_gradients = self.parameters.dropout.apply_dropout(activation_gradients)
-        weights_gradients = np.dot(activation.T, activation_gradients)
+        weights_gradients = np.dot(activation.T, activation_gradients.T).T
         bias_gradients = np.sum(activation_gradients, axis=0)
         new_gradients = np.dot(activation_gradients, self.parameters.weights.T)
         if self.parameters.regularization:
@@ -201,14 +204,50 @@ X_train, X_test, y_train, y_test = train_test_split(X_processed, y_processed, te
 # Update input size of the first layer
 input_size = X_train.shape[1]
 
-# Model configuration
-model = Model()
-model.add_layer(Layer(Neuron(Activation.relu), Parameters(input_size=input_size, output_size=4, learning_rate=0.01)))
-model.add_layer(Layer(Neuron(Activation.relu), Parameters(input_size=4, output_size=4, learning_rate=0.01)))
-model.add_layer(Layer(Neuron(Activation.sigmoid), Parameters(input_size=4, output_size=1, learning_rate=0.01)))
 
-# Train the model
-train_model(X_train, y_train, model)
+class ModelWrapper(BaseEstimator, RegressorMixin):
+    def __init__(self, learning_rate=0.01, dropout_rate=0, reg_strength=0, reg_type=None):
+        self.learning_rate = learning_rate
+        self.dropout_rate = dropout_rate
+        self.reg_strength = reg_strength
+        self.reg_type = reg_type
+        self.model = None
 
-# Evaluate the model
-evaluate_model(X_test, y_test, model)
+    def fit(self, X, y):
+        input_size = X.shape[1]
+        self.model = create_model(self.learning_rate, self.dropout_rate, self.reg_strength, self.reg_type)
+        train_model(X, y, self.model)
+        return self
+
+    def predict(self, X):
+        return (self.model.forward_propagation(X)[-1] > 0.5).astype(int)
+
+# Perform grid search with ModelWrapper
+grid_search = GridSearchCV(estimator=ModelWrapper(), param_grid=param_grid, cv=3, scoring=make_scorer(mean_squared_error), verbose=2)
+grid_result = grid_search.fit(X_train, y_train)
+
+# Define a function to create the model
+def create_model(learning_rate=0.01, dropout_rate=0, reg_strength=0, reg_type=None):
+    model = Model()
+    model.add_layer(Layer(Neuron(Activation.relu), Parameters(input_size=input_size, output_size=4, learning_rate=learning_rate, regularization=Regularization(reg_type, reg_strength), dropout=Dropout(dropout_rate))))
+    model.add_layer(Layer(Neuron(Activation.relu), Parameters(input_size=4, output_size=4, learning_rate=learning_rate, regularization=Regularization(reg_type, reg_strength), dropout=Dropout(dropout_rate))))
+    model.add_layer(Layer(Neuron(Activation.sigmoid), Parameters(input_size=4, output_size=1, learning_rate=learning_rate, regularization=Regularization(reg_type, reg_strength), dropout=Dropout(dropout_rate))))
+    return model
+
+# Define the parameter grid
+param_grid = {
+    'learning_rate': [0.001, 0.01, 0.1],
+    'dropout_rate': [0, 0.1, 0.2],
+    'reg_strength': [0, 0.001, 0.01],
+    'reg_type': [None, 'l1', 'l2']
+}
+
+# Create the model
+model = create_model()
+
+# Perform grid search
+grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=3, scoring=make_scorer(mean_squared_error), verbose=2)
+grid_result = grid_search.fit(X_train, y_train)
+
+# Summarize results
+print("Best: %f using %s" % (grid_result.best_score_, grid_result.best_params_))
